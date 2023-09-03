@@ -1,0 +1,40 @@
+version: '3'
+services:
+  thehive:
+    image: thehiveproject/thehive
+    ports:
+      - 9000:9000
+    environment:
+      THEHIVE_DB_URI: jdbc:postgresql://db:5432/thehive
+      THEHIVE_DB_USER: thehive
+      THEHIVE_DB_PASSWORD: password
+    depends_on:
+      - db
+  cortex:
+    image: thehiveproject/cortex
+    ports:
+      - 9001:9001
+    environment:
+      CORTEX_DB_URI: jdbc:postgresql://db:5432/cortex
+      CORTEX_DB_USER: cortex
+      CORTEX_DB_PASSWORD: password
+      CORTEX_ELASTICSEARCH_URI: http://elasticsearch:9200
+      THEHIVE_URL: http://thehive:9000
+    depends_on:
+      - db
+      - elasticsearch
+      - thehive
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.12.0
+    environment:
+      discovery.type: single-node
+    ports:
+      - 9201:9201
+      - 9301:9301
+  db:
+    image: postgres
+    environment:
+      POSTGRES_DB: cortex
+      POSTGRES_USER: cortex
+      POSTGRES_PASSWORD: password
+

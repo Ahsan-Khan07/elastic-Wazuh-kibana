@@ -1,4 +1,4 @@
-version: "3"
+version: '2.2'
 
 services:
   setup:
@@ -31,15 +31,9 @@ services:
           "      - localhost\n"\
           "    ip:\n"\
           "      - 127.0.0.1\n"\
-          "  - name: es02\n"\
+          "  - name: kibana\n"\
           "    dns:\n"\
-          "      - es02\n"\
-          "      - localhost\n"\
-          "    ip:\n"\
-          "      - 127.0.0.1\n"\
-          "  - name: es03\n"\
-          "    dns:\n"\
-          "      - es03\n"\
+          "      - kibana\n"\
           "      - localhost\n"\
           "    ip:\n"\
           "      - 127.0.0.1\n"\
@@ -68,7 +62,9 @@ services:
       interval: 1s
       timeout: 5s
       retries: 120
-
+        
+        #### Elasticsearch Container Compose  #####    
+  
   es01:
     depends_on:
       setup:
@@ -114,43 +110,58 @@ services:
       interval: 10s
       timeout: 10s
       retries: 120
+    
+    #### Kibana Container Compose  ##### 
 
   kibana:
+    image: docker.elastic.co/kibana/kibana:${ES_VERSION}
+    container_name: kib01
+    hostname: kibana
     depends_on:
       es01:
         condition: service_healthy
-    image: docker.elastic.co/kibana/kibana:${ES_VERSION}
-    container_name: kib01
-    user: "0"
+    user: "root:root"
     command: >
-      sh -c "chown -R kibana:kibana /usr/share/kibana/data &&
-             chown -R kibana:kibana /usr/share/kibana/plugins &&
-             /usr/share/kibana/bin/kibana-plugin install https://packages.wazuh.com/4.x/ui/kibana/wazuh_kibana-4.5.1_7.17.11-1.zip &&
-             /usr/local/bin/kibana-docker --allow-root"
-    hostname: kibana
-    volumes:
-      - certs:/usr/share/kibana/config/certs:rw
-      - kibanadata:/usr/share/kibana/data:rw
-      - ./config/kibana/wazuh.yml:/usr/share/kibana/data/wazuh/config/wazuh.yml:rw
-    restart: always
+      sh -c "
+            /usr/share/kibana/bin/kibana-plugin install https://packages.wazuh.com/4.x/ui/kibana/wazuh_kibana-4.5.1_7.17.11-1.zip &&
+            /usr/share/kibana/bin/kibana-plugin list &&
+            /usr/share/kibana/bin/kibana-plugin remove wazuh &&
+            chown -R kibana:kibana /usr/share/kibana/data &&
+            chown -R kibana:kibana /usr/share/kibana/plugins &&
+            /usr/share/kibana/bin/kibana-plugin install https://packages.wazuh.com/4.x/ui/kibana/wazuh_kibana-4.5.1_7.17.11-1.zip &&
+            /usr/share/kibana/bin/kibana-plugin list &&
+            /usr/local/bin/kibana-docker --allow-root"
     ports:
       - 443:5601
       - ${KIBANA_PORT}:5601
     environment:
-      - SERVERNAME=kibana
+
       - ELASTICSEARCH_HOSTS=${ELASTICSEARCH_HOSTS}
       - ELASTICSEARCH_USERNAME=${ELASTICSEARCH_USERNAME}
       - ELASTICSEARCH_PASSWORD=${ELASTIC_PASSWORD}
-      - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
+      - 'ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=["certs/ca/ca.crt"]'
+      - ELASTICSEARCH_SSL_VERIFICATIONMODE=certificate
       - WAZUH_API_URL=${WAZUH_API_URL}
       - WAZUH_API_USERNAME=${WAZUH_API_USERNAME}
       - WAZUH_API_PASSWORD=${WAZUH_API_PASSWORD}
-      - SERVER_PUBLICBASEURL=http://localhost:5601
+      # - SERVER_PUBLICBASEURL=http://localhost:5601
+
+      # - XPACK_ENCRYPTION_KEY=${XPACK_ENCRYPTION_KEY}
+      - SERVER_NAME=kibana
+      - SERVER_HOST=0.0.0.0
+
+      - SERVER_SSL_ENABLED=true
+      - SERVER_SSL_KEY=certs/kibana/kibana.key
+      - SERVER_SSL_CERTIFICATE=certs/kibana/kibana.crt
+      - 'SERVER_SSL_CERTIFICATEAUTHORITIES=["certs/ca/ca.crt"]'
+
+      - xpack.security.enabled=true
+      # - XPACK_SECURITY_ENCRYPTIONKEY=${XPACK_ENCRYPTION_KEY}
+      # - XPACK_REPORTING_ENCRYPTIONKEY=${XPACK_ENCRYPTION_KEY}
+      # - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${XPACK_ENCRYPTION_KEY}
+
+    restart: always
     mem_limit: ${MEM_LIMIT}
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
     healthcheck:
       test:
         [
@@ -160,7 +171,14 @@ services:
       interval: 10s
       timeout: 10s
       retries: 120
+    volumes: 
+      - certs:/usr/share/kibana/config/certs:rw
+      - kibanadata:/usr/share/kibana/data:rw
+      - ./config/kibana/wazuh.yml:/usr/share/kibana/data/wazuh/config/wazuh.yml:rw
+      # - ./kibana/config/kibana.yml:${KIBANA_DIR}/config/kibana.yml:ro
   
+      #### Wazuh-manager Container Compose  #####
+
   wazuh.manager:
     depends_on:
       kibana: 
@@ -234,3 +252,4 @@ volumes:
 networks:
   default:
     driver: bridge
+
